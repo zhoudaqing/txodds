@@ -1,5 +1,9 @@
 language: scala
 
+# jdk to test against
+jdk:
+  - oraclejdk8
+
 # scala versions to test against
 scala:
  - 2.11.8
