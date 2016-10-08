@@ -26,30 +26,30 @@ class CodecTest extends TestKit(ActorSystem("CodecTest")) with ImplicitSender
 
 /** Message is sent from the Server to the Writer */
 class OffsetSizeCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
-  it("should encode and decode an offset and a size") in (pending)
+  it("should encode and decode an offset and a size")(pending)
 }
 
 /** Message is sent from the Writer to the Server */
 class WriteNumberCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
-  it("should encode and decode a single int") in (pending)
+  it("should encode and decode a single int")(pending)
 }
 
 /** Message is sent from the Reader to the Server */
 class NextNumberRequestCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
-  it("should encode and decode a request for the next number for a UUID")
+  it("should encode and decode a request for the next number for a UUID")(pending)
 }
 
 /** Message is sent from the Server to the Reader */
 class NextNumberResponseCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
-  it("should encode and decode a response containing a UUID and the next number")
+  it("should encode and decode a response containing a UUID and the next number")(pending)
 }
 
 /** Message is sent from the Server to the Reader */
 class EndOfSequenceCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
-  it("should encode and decode a response containing a UUID and a -1")
+  it("should encode and decode a response containing a UUID and a -1")(pending)
 }
 
 /** Message is sent from the Reader to the Server */
 class StartSequenceCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
-  it("should encode and decode a request containing a UUID and a 0")
+  it("should encode and decode a request containing a UUID and a 0")(pending)
 }
