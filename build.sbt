@@ -13,6 +13,11 @@ lazy val commonScalacOptions = Seq(
   "-language:postfixOps"
 )
 
+lazy val compilerPlugins = Seq(
+  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.7.1"),
+  addCompilerPlugin("com.milessabin" % "si2712fix-plugin" % "1.2.0" cross CrossVersion.full)
+)
+
 lazy val catsVersion = "0.7.0"
 lazy val akkaVersion = "2.4.11"
 
@@ -39,28 +44,33 @@ lazy val commonSettings = Seq(
 lazy val core = (project in file("core")).settings(
   moduleName := "core",
   commonSettings,
+  compilerPlugins,
   buildSettings
 )
 
 lazy val writer = (project in file("writer")).settings(
   moduleName := "writer",
   commonSettings,
+  compilerPlugins,
   buildSettings
 ).dependsOn(core)
 
 lazy val reader = (project in file("reader")).settings(
   moduleName := "reader",
   commonSettings,
+  compilerPlugins,
   buildSettings
 ).dependsOn(core)
 
 lazy val server = (project in file("server")).settings(
   moduleName := "server",
   commonSettings,
+  compilerPlugins,
   buildSettings
 ).dependsOn(core)
 
 lazy val root = (project in file(".")).settings(
   buildSettings,
+  compilerPlugins,
   scalacOptions ++= commonScalacOptions
 ).aggregate(core, writer, reader, server)
