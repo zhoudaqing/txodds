@@ -23,3 +23,33 @@ class CodecTest extends TestKit(ActorSystem("CodecTest")) with ImplicitSender
     "encode messages using its codec and forward them on to listeners" in(pending)
   }
 }
+
+/** Message is sent from the Server to the Writer */
+class OffsetSizeCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
+  it("should encode and decode an offset and a size") in (pending)
+}
+
+/** Message is sent from the Writer to the Server */
+class WriteNumberCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
+  it("should encode and decode a single int") in (pending)
+}
+
+/** Message is sent from the Reader to the Server */
+class NextNumberRequestCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
+  it("should encode and decode a request for the next number for a UUID")
+}
+
+/** Message is sent from the Server to the Reader */
+class NextNumberResponseCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
+  it("should encode and decode a response containing a UUID and the next number")
+}
+
+/** Message is sent from the Server to the Reader */
+class EndOfSequenceCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
+  it("should encode and decode a response containing a UUID and a -1")
+}
+
+/** Message is sent from the Reader to the Server */
+class StartSequenceCodecTest extends FunSpec with GeneratorDrivenPropertyChecks {
+  it("should encode and decode a request containing a UUID and a 0")
+}
