@@ -30,6 +30,7 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-http-experimental" % akkaVersion,
+    "org.mongodb.scala" %% "mongo-scala-driver" % "1.1.1",
     "org.typelevel" %% "cats-core" % catsVersion,
     "org.typelevel" %% "cats-macros" % catsVersion,
     "org.typelevel" %% "cats-kernel" % catsVersion,

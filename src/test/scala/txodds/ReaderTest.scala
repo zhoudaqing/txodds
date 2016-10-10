@@ -80,10 +80,6 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
       And("it should start a new sequence")
       checkRequest()
     }
-
-    "should report the number of completed sequences" in(pending)
-    "should report the number of in-flight sequences" in(pending)
-    "periodically send keepalive messages" in(pending)
   }
 
     def checkTcpConnection(): Unit = {

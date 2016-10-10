@@ -29,24 +29,24 @@ object ServerApp {
     val http = Http()
     val materializer = ActorMaterializer()
     val reporter = system.actorOf(StatsReporter.props(http, materializer, "localhost", 8092))
-
+    val database = system.actorOf(Database.props("basic-db", "numbers"), "database")
     val io = IO(Tcp)
     val writerPort = new InetSocketAddress("localhost", 8080)
     val readerPort = new InetSocketAddress("localhost", 8090)
-    val server = system.actorOf(ServerSystem.props(io, writerPort, readerPort, 5 minutes, 30 minutes, 10, reporter))
+    val server = system.actorOf(ServerSystem.props(io, writerPort, readerPort, 5 minutes, 30 minutes, 10, reporter, database))
   }
 }
 
 object ServerSystem {
   def props(tcpActor: ActorRef, writerPort: InetSocketAddress, readerPort: InetSocketAddress, 
-    timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef): Props = Props(new ServerSystem(tcpActor, 
-      writerPort, readerPort, timeout, period, poolSize, reporter))
+    timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef, dbActor: ActorRef): Props = Props(new ServerSystem(tcpActor, 
+      writerPort, readerPort, timeout, period, poolSize, reporter, dbActor))
 }
 
-class ServerSystem(tcpActor: ActorRef, writerPort: InetSocketAddress, readerPort: InetSocketAddress, timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef) extends Actor with ActorLogging {
+class ServerSystem(tcpActor: ActorRef, writerPort: InetSocketAddress, readerPort: InetSocketAddress, timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef, dbActor: ActorRef) extends Actor with ActorLogging {
 
   override def preStart(): Unit = {
-    val core = context.actorOf(Core.props(poolSize, reporter), "core")
+    val core = context.actorOf(Core.props(poolSize, reporter, dbActor), "core")
     val f = Handler.props(core, timeout, period) _
     val writerServer = context.actorOf(Server.props(tcpActor, writerPort, f), "writer-server")
     val readerServer = context.actorOf(Server.props(tcpActor, readerPort, f), "reader-server")
@@ -168,10 +168,10 @@ object Core {
   case class Running(clients: Clients, sequences: Sequences, waiting: Queue[UUID], 
     paired: Map[UUID, Queue[Int]]) extends Data
 
-  def props(size: Int, reporter: ActorRef): Props = Props(new Core(size, reporter))
+  def props(size: Int, reporter: ActorRef, database: ActorRef): Props = Props(new Core(size, reporter, database))
 }
 
-class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State, Core.Data] {
+class Core(poolSize: Int, reporter: ActorRef, database: ActorRef) extends Actor with FSM[Core.State, Core.Data] {
   import Core._
 
   val random = new Random()
@@ -210,6 +210,7 @@ class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State,
   when(Initialized) {
     case Event((`writeSequenceResponse`, data: ByteVector), r: Running) => 
       val i = decode(writeNumberCodec, data.toBitVector)
+      database ! i
       log.info("received number [{}] - awaiting [{}] numbers", i, r.sequences.remaining - 1)
       val sequences = if(r.sequences.remaining > 1)
         Sequences(r.sequences.all, r.sequences.current.enqueue(i), r.sequences.remaining - 1)

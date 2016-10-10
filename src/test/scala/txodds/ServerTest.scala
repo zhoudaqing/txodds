@@ -30,7 +30,8 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
  
   val writerRemote = new InetSocketAddress(0)
   val readerRemote = new InetSocketAddress(1)
-  var reporter = TestProbe("reporter")
+  val reporter = TestProbe("reporter")
+  val database = TestProbe("database")
 
   "A Server system" must {
     "bind itself to a TCP port" in {
@@ -38,7 +39,7 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
 
       When("the server starts")
       val serverSystem = system.actorOf(ServerSystem.props(tcpActor.ref, writerRemote, 
-        readerRemote, 10 seconds, 30 minutes, 1, reporter.ref))
+        readerRemote, 10 seconds, 30 minutes, 1, reporter.ref, database.ref))
       Then("it should bind to the tcp port")
       tcpActor.expectMsgType[Bind]
 
@@ -80,11 +81,5 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
           reader.expectMsgType[Write]
       }
     }
-    "regiter the reader and writer as clients" in(pending)
-    "receive requests for 1000 sequences from the reader" in(pending)
-    "request sequences from the writer" in(pending)
-    "forward sequences from the writer to the reader" in(pending)
-    "only keep 1000 channels open" in(pending)
-    "periodically send keepalive messages" in(pending)
   }
 }
