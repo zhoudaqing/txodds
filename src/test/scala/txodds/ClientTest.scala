@@ -63,6 +63,7 @@ class ClientTest extends TestKit(ActorSystem("ClientTest")) with ImplicitSender
       val listener = TestProbe("listener")
       client ! Client.RegisterListener(5, listener.ref)
       client ! Tcp.Received(ByteString(5, 3))
+      listener.expectMsg(Client.Connected)
       listener.expectMsgType[Client.Incoming]
     }
 
@@ -78,9 +79,11 @@ class ClientTest extends TestKit(ActorSystem("ClientTest")) with ImplicitSender
       client ! Client.RegisterListener(2, secondListener.ref)
 
       client ! Tcp.Received(ByteString(1, 3))
+      firstListener.expectMsg(Client.Connected)
       firstListener.expectMsgType[Client.Incoming]
 
       client ! Tcp.Received(ByteString(2, 3))
+      secondListener.expectMsg(Client.Connected)
       secondListener.expectMsgType[Client.Incoming]
     }
   }

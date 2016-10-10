@@ -23,6 +23,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       val keepAlive = system.actorOf(KeepAlive.props(10 seconds, 30 minutes, connection.ref, Nil))
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
+      keepAlive ! Client.Connected
       connection.expectMsgType[Client.Output]
     }
     "repeat pings at the specified duration as long as pings are always responded to" in {
@@ -30,6 +31,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       val keepAlive = system.actorOf(KeepAlive.props(100 milliseconds, 500 milliseconds, connection.ref, Nil))
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
+      keepAlive ! Client.Connected
       connection.expectMsgType[Client.Output]
       connection.send(keepAlive, Client.Incoming(Headers.keepAliveResponse, ByteVector.empty))
       Thread.sleep((1 second).toMillis)
@@ -42,6 +44,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       val keepAlive = system.actorOf(KeepAlive.props(2 milliseconds, 30 minutes, connection.ref, List(listener.ref)))
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
+      keepAlive ! Client.Connected
       connection.expectMsgType[Client.Output]
       listener.expectMsg(KeepAlive.Terminate)
     }
@@ -52,6 +55,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       val keepAlive = system.actorOf(KeepAlive.props(100 milliseconds, 30 minutes, connection.ref, List(listener.ref)))
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
+      keepAlive ! Client.Connected
       connection.expectMsgType[Client.Output]
       Thread.sleep((200 milliseconds).toMillis)
       connection.send(keepAlive, Client.Incoming(Headers.keepAliveResponse, ByteVector.empty))

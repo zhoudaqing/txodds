@@ -27,6 +27,7 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
   var tcpActor: TestProbe = _
   var connectionActor: TestProbe = _
   var writerSystem: ActorRef = _
+  var reporter = TestProbe("reporter")
 
   "A Writer system" must { 
     "generate a sequence of numbers" in {
@@ -34,13 +35,14 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       When("the system starts")
       tcpActor = TestProbe("tcpActor")
       connectionActor = TestProbe("connection")
-      writerSystem = system.actorOf(WriterSystem.props(1 second, 10 seconds, tcpActor.ref, remote),
+      writerSystem = system.actorOf(WriterSystem.props(1 second, 10 seconds, tcpActor.ref, remote, reporter.ref),
         "writer-system-0")
 
       Then("it should connect to the remote port via tcp")
       checkTcpConnection()
 
-      And("it should send a keepalive message")
+      And("it should send a greet and keepalive message")
+      checkGreet()
       checkKeepAlive()
 
       When("the keepalive is responded to")
@@ -58,7 +60,7 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       Given("a writer system")
       When("the system starts")
       tcpActor = TestProbe("tcpActor")
-      writerSystem = system.actorOf(WriterSystem.props(1 second, 10 seconds, tcpActor.ref, remote), 
+      writerSystem = system.actorOf(WriterSystem.props(1 second, 10 seconds, tcpActor.ref, remote, reporter.ref), 
         "writer-system-1")
       val watcher = TestProbe("watcher")
       watcher watch writerSystem
@@ -66,7 +68,8 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       Then("it should connect to the remote port via tcp")
       checkTcpConnection()
 
-      And("it should send a keepalive message")
+      And("it should send a greet and keepalive message")
+      checkGreet()
       checkKeepAlive()
 
       When("the keepalive is not responded to")
@@ -82,6 +85,14 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       val client = tcpActor.lastSender
       connectionActor.send(client, Tcp.Connected(remote, remote))
       connectionActor.expectMsg(Tcp.Register(client))
+    }
+
+    def checkGreet(): Unit = {
+      val writeMessage = connectionActor.expectMsgType[Tcp.Write]
+      val data = writeMessage.data.toByteVector
+      inside(Codecs.headerCodec.decode(data.toBitVector).toXor) {
+        case Xor.Right(result) => result.value should ===(Headers.writeGreet)
+      }
     }
 
     def checkKeepAlive(): Unit = {
