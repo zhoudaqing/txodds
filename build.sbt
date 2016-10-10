@@ -29,6 +29,7 @@ lazy val commonSettings = Seq(
   ),
   libraryDependencies ++= Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+    "com.typesafe.akka" %% "akka-http-experimental" % akkaVersion,
     "org.typelevel" %% "cats-core" % catsVersion,
     "org.typelevel" %% "cats-macros" % catsVersion,
     "org.typelevel" %% "cats-kernel" % catsVersion,
@@ -41,36 +42,8 @@ lazy val commonSettings = Seq(
   )
 )
 
-lazy val core = (project in file("core")).settings(
-  moduleName := "core",
+lazy val root = (project in file(".")).settings(
   commonSettings,
   compilerPlugins,
   buildSettings
 )
-
-lazy val writer = (project in file("writer")).settings(
-  moduleName := "writer",
-  commonSettings,
-  compilerPlugins,
-  buildSettings
-).dependsOn(core)
-
-lazy val reader = (project in file("reader")).settings(
-  moduleName := "reader",
-  commonSettings,
-  compilerPlugins,
-  buildSettings
-).dependsOn(core)
-
-lazy val server = (project in file("server")).settings(
-  moduleName := "server",
-  commonSettings,
-  compilerPlugins,
-  buildSettings
-).dependsOn(core)
-
-lazy val root = (project in file(".")).settings(
-  buildSettings,
-  compilerPlugins,
-  scalacOptions ++= commonScalacOptions
-).aggregate(core, writer, reader, server)
