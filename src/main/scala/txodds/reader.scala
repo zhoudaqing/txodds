@@ -80,54 +80,42 @@ class Reader(poolSize: Int, client: ActorRef, reporter: ActorRef) extends Actor 
       val ids = (0 until poolSize).map(_ => UUID.randomUUID())
       previousValues = mu.Map(ids.map(id => id -> None): _*)
       ids.foreach { id =>
-        val data = (headerCodec ~ startSequenceCodec).encode((startSequence, id)).toXor
-        data.foreach { d => client ! Client.Output(d.toByteVector) }
-        data.leftMap { err => log.error(EncodeError(err).toString) }
+        val data = encode(headerCodec ~ startSequenceCodec)((startSequence, id))
+        client ! Outgoing(data.toByteVector)
       }
       context become run
   }
 
   def run: Receive = {
-    case Client.Incoming(`nextNumber`, data) =>
-      for {
-        nn <- nextNumberResponseCodec.decode(data.toBitVector).toXor.map(_.value).leftMap(DecodeError)
-        prev <- previousValues.get(nn.uuid).toRightXor(UnsentIdError(nn.uuid, nn.number))
-      } yield {
-        prev match {
-          case None => inFlight = inFlight + 1
-          case Some(p) =>
-           if(nn.number - p != 1)
-             log.error(NumbersNotIncrementingError(nn.uuid, p, nn.number).toString())
-        }
-        previousValues += ((nn.uuid, Some(nn.number)))
-        
-        val encoded = (headerCodec ~ nextNumberRequestCodec).encode((nextNumberRequest, nn.uuid)).toXor.leftMap(EncodeError) match {
-          case Xor.Right(d) => client ! Client.Output(d.toByteVector)
-          case Xor.Left(err) => log.error(err.toString())
-        }
+    case Incoming(`nextNumber`, data) =>
+      val next = decode(nextNumberCodec, data.toBitVector)
+      val prev = previousValues(next.uuid)
+      prev match {
+        case None => inFlight = inFlight + 1
+        case Some(p) =>
+          if(next.number - p != 1)
+            log.error(NumbersNotIncrementingError(next.uuid, p, next.number).toString())
       }
-    case Client.Incoming(`endOfSequence`, data) =>
-      val xor = for {
-        id <- endOfSequenceCodec.decode(data.toBitVector).toXor.map(_.value).leftMap(DecodeError)
-        confirm <- (headerCodec ~ uuidCodec).encode((endOfSequenceConfirm, id)).toXor.leftMap(EncodeError)
-        nextId = UUID.randomUUID()
-        startSequence <- (headerCodec ~ startSequenceCodec).encode((startSequence, nextId))
-        .toXor.leftMap(EncodeError)
-      } yield {
-        previousValues -= id
-        inFlight = inFlight - 1
-        completed = completed + 1
-        client ! Client.Output(confirm.toByteVector)
-        previousValues += ((nextId, None))
-        client ! Client.Output(startSequence.toByteVector)
-      }
-      xor.leftMap { err => log.error(err.toString())}
+      val out = encode(headerCodec ~ uuidCodec)((nextNumberRequest, next.uuid))
+      client ! Outgoing(out.toByteVector)
+    case Incoming(`endOfSequence`, data) =>
+      val id = decode(endOfSequenceCodec, data.toBitVector)
+      val confirm = encode(headerCodec ~ uuidCodec)((endOfSequenceConfirm, id))
+      client ! Outgoing(confirm.toByteVector)
+
+      previousValues -= id
+      inFlight = inFlight - 1
+      completed = completed + 1
+
+      val nextId = UUID.randomUUID()      
+      previousValues += ((nextId, None))
+      val start = encode(headerCodec ~ startSequenceCodec)((startSequence, nextId))
+      client ! Outgoing(start.toByteVector)
+      report()
   }
 
   def report(): Unit = {
     reporter ! s"Completed: $completed in flight: $inFlight"
   }
 }
-
-case class UnsentIdError(id: UUID, number: Int) extends Throwable
 case class NumbersNotIncrementingError(id: UUID, prev: Int, next: Int) extends Throwable

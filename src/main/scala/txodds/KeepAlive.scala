@@ -47,15 +47,14 @@ class KeepAlive(timeout: FiniteDuration, period: FiniteDuration, connection: Act
   }
 
   def respond: Receive = {
-    case Client.Incoming(`keepAliveRequest`, _) =>
+    case Incoming(`keepAliveRequest`, _) =>
       log.info("responding to keepAlive request")
-      val data = headerCodec.encode(keepAliveResponse).toXor
-      data.foreach { d => connection ! Client.Output(d.toByteVector) }
-      data.leftMap { err => log.error(EncodeError(err).toString()) }
+      val data = encode(headerCodec)(keepAliveResponse)
+      connection ! Outgoing(data.toByteVector)
   }
 
   def awaitResponse: Receive = respond orElse {
-    case Client.Incoming(`keepAliveResponse`, _) =>
+    case Incoming(`keepAliveResponse`, _) =>
       log.info("received keepalive response")
       _responseReceived = true
     case KeepAlive.CheckResponse =>
@@ -78,7 +77,7 @@ class KeepAlive(timeout: FiniteDuration, period: FiniteDuration, connection: Act
 
     val data = encode(headerCodec)(keepAliveRequest)
     log.info("sending keepalive")
-    connection ! Client.Output(data.toByteVector)
+    connection ! Outgoing(data.toByteVector)
     context.system.scheduler.scheduleOnce(timeout, self, KeepAlive.CheckResponse)
   }
 

@@ -16,6 +16,8 @@ import java.net.InetSocketAddress
 import cats._
 import cats.data._
 
+import scodec.codecs._
+
 class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll with GivenWhenThen with Inside {
  
@@ -89,8 +91,8 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
 
     def checkGreetOrKeepAlive(): Unit = {
       val writeMessage = connectionActor.expectMsgType[Tcp.Write]
-      val data = writeMessage.data.toByteVector
-      inside(Codecs.headerCodec.decode(data.toBitVector).toXor) {
+      val data = writeMessage.data.toBitVector
+      inside(Codecs.headerCodec.decode(data).toXor) {
         case Xor.Right(result) => result.value should (equal(Headers.writeGreet) or equal(Headers.keepAliveRequest))
       }
     }
@@ -117,7 +119,7 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
 
     def expectSequenceResponse(expected: Int): Unit = {
       val msg = connectionActor.expectMsgType[Tcp.Write]
-      (Codecs.headerCodec ~ Codecs.writeNumberCodec).decode(msg.data.toByteVector.toBitVector).toXor match {
+      (Codecs.headerCodec ~ int32).decode(msg.data.toBitVector).toXor match {
         case Xor.Left(err) => fail(s"could not decode sequence response $err")
         case Xor.Right(result) => 
           val (header, number) = result.value

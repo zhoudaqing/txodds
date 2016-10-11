@@ -9,5 +9,5 @@ trait AkkaInstances {
 }
 
 final class ByteStringOps(val b: ByteString) extends AnyVal {
-  def toByteVector: ByteVector = ByteVector(b.toByteBuffer)
+  def toBitVector: BitVector = BitVector(b.toByteBuffer)
 }

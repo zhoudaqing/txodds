@@ -66,14 +66,14 @@ class Writer(client: ActorRef, reporter: ActorRef) extends Actor with ActorLoggi
 
   def receive: Receive = {
     case Client.Connected =>
-      client ! Client.Output((encode(headerCodec)(writeGreet)).toByteVector)
-    case Client.Incoming(`writeSequenceRequest`, data) =>
+      client ! Outgoing((encode(headerCodec)(writeGreet)).toByteVector)
+    case Incoming(`writeSequenceRequest`, data) =>
       val sr = decode(sequenceRequestCodec, data.toBitVector)
       log.info("received write sequence request for offset [{}] size [{}]", sr.offset, sr.size)
       SequenceGenerator(sr.offset, sr.size).foreach { i =>
         log.info("writing number [{}]", i)
-        val response = encode(headerCodec ~ writeNumberCodec)((writeSequenceResponse, i))
-        client ! Client.Output(response.toByteVector)
+        val response = encode(headerCodec ~ int32)((writeSequenceResponse, i))
+        client ! Outgoing(response.toByteVector)
       }
       numSequences = numSequences + 1
       reporter ! s"Sequences: $numSequences"

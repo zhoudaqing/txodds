@@ -14,12 +14,12 @@ import scala.collection.{mutable => mu}
 
 import Tcp._
 
+case class Incoming(header: Byte, data: ByteVector)
+case class Outgoing(data: ByteVector)
+
 object Client {
   sealed trait Received extends Any
   case class RegisterListener(header: Byte, listener: ActorRef) extends Received
-  case class Output(data: ByteVector) extends AnyVal with Received
-
-  case class Incoming(header: Byte, data: ByteVector)
   case object Connected
   
   def props(tcpActor: ActorRef, remote: InetSocketAddress): Props =
@@ -56,18 +56,14 @@ class Client(tcpActor: ActorRef, remote: InetSocketAddress) extends Actor with A
     case Client.RegisterListener(header, listener) =>
       listeners += (header -> listener)
       listener ! Client.Connected
-    case Client.Output(data) =>
+    case Outgoing(data) =>
       connection ! Write(data.toByteString)
     case CommandFailed(_: Write) =>
       log.error("Failed to write data to server")
     case Received(data) =>
-      var xor = for {
-        hd <- HeaderDecoder(data.toByteVector)
-        (header, data) = hd
-        listener <- listeners.get(header).toRightXor(NoListenerError(header))
-      } yield listener ! Client.Incoming(header, data)
-
-      xor.leftMap { err => log.error(err.toString()) }
+      val (header, bytes) = Codecs.decode(Codecs.headerDecoder, data.toBitVector)
+      val l = listeners(header)
+      l ! Incoming(header, bytes)
     case _: ConnectionClosed =>
       log.error("Connection between server closed")
       context stop self
@@ -76,15 +72,3 @@ class Client(tcpActor: ActorRef, remote: InetSocketAddress) extends Actor with A
 
   def receive: Receive = unconnected
 }
-
-object HeaderDecoder {
-  val decoder = for {
-    header <- scodec.codecs.byte
-    data <- scodec.codecs.bytes
-  } yield (header, data)
-
-  def apply(data: ByteVector): Xor[DecodeError, (Byte, ByteVector)] = 
-    decoder.decode(data.toBitVector).toXor.leftMap(DecodeError).map(_.value)
-}
-
-case class NoListenerError(header: Byte) extends Throwable

@@ -25,7 +25,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
       keepAlive ! Client.Connected
-      connection.expectMsgType[Client.Output]
+      connection.expectMsgType[Outgoing]
     }
     "repeat pings at the specified duration as long as pings are always responded to" in {
       val connection = TestProbe("connection")
@@ -33,10 +33,10 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
       keepAlive ! Client.Connected
-      connection.expectMsgType[Client.Output]
-      connection.send(keepAlive, Client.Incoming(Headers.keepAliveResponse, ByteVector.empty))
+      connection.expectMsgType[Outgoing]
+      connection.send(keepAlive, Incoming(Headers.keepAliveResponse, ByteVector.empty))
       Thread.sleep((1 second).toMillis)
-      connection.expectMsgType[Client.Output]
+      connection.expectMsgType[Outgoing]
     }
 
     "send a termination message when a ping is not responded to" in {
@@ -46,7 +46,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
       keepAlive ! Client.Connected
-      connection.expectMsgType[Client.Output]
+      connection.expectMsgType[Outgoing]
       listener.expectMsg(KeepAlive.Terminate)
     }
 
@@ -57,9 +57,9 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
       connection.expectMsgType[Client.RegisterListener]
       connection.expectMsgType[Client.RegisterListener]
       keepAlive ! Client.Connected
-      connection.expectMsgType[Client.Output]
+      connection.expectMsgType[Outgoing]
       Thread.sleep((200 milliseconds).toMillis)
-      connection.send(keepAlive, Client.Incoming(Headers.keepAliveResponse, ByteVector.empty))
+      connection.send(keepAlive, Incoming(Headers.keepAliveResponse, ByteVector.empty))
       listener.expectMsg(KeepAlive.Terminate)
     }
   }
