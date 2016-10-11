@@ -22,6 +22,7 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll with GivenWhenThen with Inside {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
 
@@ -80,10 +81,6 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
       And("it should start a new sequence")
       checkRequest()
     }
-
-    "should report the number of completed sequences" in(pending)
-    "should report the number of in-flight sequences" in(pending)
-    "periodically send keepalive messages" in(pending)
   }
 
     def checkTcpConnection(): Unit = {
@@ -95,8 +92,8 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
 
     def checkKeepAlive(): Unit = {
       val writeMessage = connectionActor.expectMsgType[Tcp.Write]
-      val data = writeMessage.data.toByteVector
-      inside(Codecs.headerCodec.decode(data.toBitVector).toXor) {
+      val data = writeMessage.data.toBitVector
+      inside(Codecs.headerCodec.decode(data).toXor) {
         case Xor.Right(result) => result.value should ===(Headers.keepAliveRequest)
       }
     }
@@ -112,7 +109,7 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
 
   def checkRequest(): UUID = {
     val write = connectionActor.expectMsgType[Tcp.Write]
-    val data = (Codecs.headerCodec ~ Codecs.startSequenceCodec).decode(write.data.toByteVector.toBitVector).toXor.map(_.value)
+    val data = (Codecs.headerCodec ~ Codecs.startSequenceCodec).decode(write.data.toBitVector).toXor.map(_.value)
     data match {
       case Xor.Right((h, id)) => h should ===(Headers.startSequence)
         id
@@ -122,7 +119,7 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
 
   def respondToRequest(id: UUID, number: Int) = {
     val client = tcpActor.lastSender
-    val data = (Codecs.headerCodec ~ Codecs.nextNumberResponseCodec).encode((Headers.nextNumber, NextNumber(id, number))).toXor match {
+    val data = (Codecs.headerCodec ~ Codecs.nextNumberCodec).encode((Headers.nextNumber, NextNumber(id, number))).toXor match {
       case Xor.Right(d) => d.toByteVector.toByteString
       case Xor.Left(err) => fail(s"could not encode next number $err")
     }
@@ -131,7 +128,7 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
 
   def checkNextNumberRequest(): Unit = {
     val write = connectionActor.expectMsgType[Tcp.Write]
-    val xor = (Codecs.headerCodec ~ Codecs.nextNumberRequestCodec).decode(write.data.toByteVector.toBitVector).toXor
+    val xor = (Codecs.headerCodec ~ Codecs.uuidCodec).decode(write.data.toBitVector).toXor
     xor match {
       case Xor.Right(result) => 
         result.value._1 should ===(Headers.nextNumberRequest)
@@ -150,7 +147,7 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
 
   def checkTerminationConfirmation(): Unit = {
     val write = connectionActor.expectMsgType[Tcp.Write]
-    val xor = (Codecs.headerCodec ~ Codecs.uuidCodec).decode(write.data.toByteVector.toBitVector).toXor
+    val xor = (Codecs.headerCodec ~ Codecs.uuidCodec).decode(write.data.toBitVector).toXor
     xor match {
       case Xor.Right(result) => 
         result.value._1 should ===(Headers.endOfSequenceConfirm)

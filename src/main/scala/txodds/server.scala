@@ -20,7 +20,6 @@ import java.net.InetSocketAddress
 
 import Tcp._
 
-
 object ServerApp {
 
   def main(args: Array[String]) = {
@@ -29,27 +28,25 @@ object ServerApp {
     val http = Http()
     val materializer = ActorMaterializer()
     val reporter = system.actorOf(StatsReporter.props(http, materializer, "localhost", 8092))
-
+    val database = system.actorOf(Database.props("basic-db", "numbers"), "database")
     val io = IO(Tcp)
-    val writerPort = new InetSocketAddress("localhost", 8080)
-    val readerPort = new InetSocketAddress("localhost", 8090)
-    val server = system.actorOf(ServerSystem.props(io, writerPort, readerPort, 5 minutes, 30 minutes, 10, reporter))
+    val port = new InetSocketAddress("localhost", 8080)
+    val server = system.actorOf(ServerSystem.props(io, port, 5 minutes, 30 minutes, 10, reporter, database))
   }
 }
 
 object ServerSystem {
-  def props(tcpActor: ActorRef, writerPort: InetSocketAddress, readerPort: InetSocketAddress, 
-    timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef): Props = Props(new ServerSystem(tcpActor, 
-      writerPort, readerPort, timeout, period, poolSize, reporter))
+  def props(tcpActor: ActorRef, port: InetSocketAddress, 
+    timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef, dbActor: ActorRef): Props = Props(new ServerSystem(tcpActor, 
+      port, timeout, period, poolSize, reporter, dbActor))
 }
 
-class ServerSystem(tcpActor: ActorRef, writerPort: InetSocketAddress, readerPort: InetSocketAddress, timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef) extends Actor with ActorLogging {
+class ServerSystem(tcpActor: ActorRef, port: InetSocketAddress, timeout: FiniteDuration, period: FiniteDuration, poolSize: Int, reporter: ActorRef, dbActor: ActorRef) extends Actor with ActorLogging {
 
   override def preStart(): Unit = {
-    val core = context.actorOf(Core.props(poolSize, reporter), "core")
+    val core = context.actorOf(Core.props(poolSize, reporter, dbActor), "core")
     val f = Handler.props(core, timeout, period) _
-    val writerServer = context.actorOf(Server.props(tcpActor, writerPort, f), "writer-server")
-    val readerServer = context.actorOf(Server.props(tcpActor, readerPort, f), "reader-server")
+    val readerServer = context.actorOf(Server.props(tcpActor, port, f), "server")
   }
 
   def receive: Receive = {
@@ -79,7 +76,6 @@ class Server(tcpActor: ActorRef, remote: InetSocketAddress, f: ActorRef => Props
       val connection = sender()
       log.info("Connected to actor [{}]", connection.path.name)
       val handler: ActorRef = context.actorOf(f(connection), s"handler-${connection.path.name}")
-      connection ! Register(handler)
     case CommandFailed(_: Bind) => 
       log.error("Failed to bind to port. Exiting.")
       context stop self
@@ -100,13 +96,14 @@ class Handler(connection: ActorRef, core: ActorRef,
   var keepAlive: ActorRef = _
 
   override def preStart(): Unit = {
+    connection ! Register(self)
     keepAlive = context.actorOf(KeepAlive.props(timeout, period, self, List(self)), "keepalive")
     keepAlive ! Client.Connected
   }
 
   def handleKeepAlive: Receive = {
     case _ : Client.RegisterListener =>
-    case Client.Output(d) => 
+    case Outgoing(d) => 
       log.info("propagating keepalive")
       connection ! Write(d.toByteString)
     case KeepAlive.Terminate =>
@@ -115,8 +112,8 @@ class Handler(connection: ActorRef, core: ActorRef,
   }
 
   def handle(header: Byte, data: ByteVector): Unit = header match {
-    case `keepAliveRequest` => keepAlive ! Client.Incoming(keepAliveRequest, data)
-    case `keepAliveResponse` => keepAlive ! Client.Incoming(keepAliveResponse, data)
+    case `keepAliveRequest` => keepAlive ! Incoming(keepAliveRequest, data)
+    case `keepAliveResponse` => keepAlive ! Incoming(keepAliveResponse, data)
     case `writeGreet` =>
       core ! Core.RegisterWriter(connection)
       context become forward
@@ -128,16 +125,16 @@ class Handler(connection: ActorRef, core: ActorRef,
 
   def start: Receive = handleKeepAlive orElse {
     case Received(data) =>
-      val (header, bytes) = decode(HeaderDecoder.decoder, data.toByteVector.toBitVector)
+      val (header, bytes) = decode(headerDecoder, data.toBitVector)
       handle(header, bytes)
   }
 
   def forward: Receive = handleKeepAlive orElse {
     case Received(data) =>
-      val (header, bytes) = decode(HeaderDecoder.decoder, data.toByteVector.toBitVector)
+      val (header, bytes) = decode(headerDecoder, data.toBitVector)
       header match {
-        case `keepAliveRequest` => keepAlive ! Client.Incoming(keepAliveRequest, bytes)
-        case `keepAliveResponse` => keepAlive ! Client.Incoming(keepAliveResponse, bytes)
+        case `keepAliveRequest` => keepAlive ! Incoming(keepAliveRequest, bytes)
+        case `keepAliveResponse` => keepAlive ! Incoming(keepAliveResponse, bytes)
         case _ => 
           log.info("forwarding message with header [{}] onto core system", header)
           core ! ((header, bytes))
@@ -151,6 +148,7 @@ class Handler(connection: ActorRef, core: ActorRef,
 import java.util.UUID
 import scala.collection.immutable._
 import scala.util.Random
+
 object Core {
   case class RegisterWriter(writer: ActorRef)
   case class RegisterReader(reader: ActorRef)
@@ -168,10 +166,10 @@ object Core {
   case class Running(clients: Clients, sequences: Sequences, waiting: Queue[UUID], 
     paired: Map[UUID, Queue[Int]]) extends Data
 
-  def props(size: Int, reporter: ActorRef): Props = Props(new Core(size, reporter))
+  def props(size: Int, reporter: ActorRef, database: ActorRef): Props = Props(new Core(size, reporter, database))
 }
 
-class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State, Core.Data] {
+class Core(poolSize: Int, reporter: ActorRef, database: ActorRef) extends Actor with FSM[Core.State, Core.Data] {
   import Core._
 
   val random = new Random()
@@ -209,7 +207,8 @@ class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State,
 
   when(Initialized) {
     case Event((`writeSequenceResponse`, data: ByteVector), r: Running) => 
-      val i = decode(writeNumberCodec, data.toBitVector)
+      val i = decode(int32, data.toBitVector)
+      database ! i
       log.info("received number [{}] - awaiting [{}] numbers", i, r.sequences.remaining - 1)
       val sequences = if(r.sequences.remaining > 1)
         Sequences(r.sequences.all, r.sequences.current.enqueue(i), r.sequences.remaining - 1)
@@ -228,7 +227,7 @@ class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State,
       report(rr)
       stay using queueSequence(rr)
     case Event((`nextNumberRequest`, data: ByteVector), r: Running) => 
-      val id = decode(nextNumberRequestCodec, data.toBitVector)
+      val id = decode(uuidCodec, data.toBitVector)
       val paired = sendNumber(r.clients.reader, id, r.paired(id), r.paired)
       val rr = r.copy(paired = paired)
       report(rr)
@@ -254,7 +253,7 @@ class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State,
       Map[UUID, Queue[Int]] = {
     if(numbers.nonEmpty) {
       val (i, next) = numbers.dequeue
-      reader ! Write(encode(headerCodec ~ nextNumberResponseCodec)((nextNumber, NextNumber(id, i))).toByteVector.toByteString)
+      reader ! Write(encode(headerCodec ~ nextNumberCodec)((nextNumber, NextNumber(id, i))).toByteVector.toByteString)
       pairs + ((id, next))
     } else {
       val data = encode(headerCodec ~ endOfSequenceCodec)((endOfSequence, id))
@@ -269,3 +268,6 @@ class Core(poolSize: Int, reporter: ActorRef) extends Actor with FSM[Core.State,
 
   startWith(Uninitialized, PendingClients(None, None, Queue.empty))
 }
+
+case class SequenceRequest(offset: Int, size: Int)
+case class NextNumber(uuid: UUID, number: Int)

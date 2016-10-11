@@ -12,6 +12,8 @@ import akka.testkit._
 
 import cats.data._
 
+import scodec.codecs._
+
 import scala.concurrent.duration._
 
 import java.net.InetSocketAddress
@@ -25,27 +27,28 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll with GivenWhenThen with Inside {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
  
-  val writerRemote = new InetSocketAddress(0)
-  val readerRemote = new InetSocketAddress(1)
-  var reporter = TestProbe("reporter")
+  val port = new InetSocketAddress(0)
+  val reporter = TestProbe("reporter")
+  val database = TestProbe("database")
 
   "A Server system" must {
     "bind itself to a TCP port" in {
       val tcpActor = TestProbe("tcp")
 
       When("the server starts")
-      val serverSystem = system.actorOf(ServerSystem.props(tcpActor.ref, writerRemote, 
-        readerRemote, 10 seconds, 30 minutes, 1, reporter.ref))
+      val serverSystem = system.actorOf(ServerSystem.props(tcpActor.ref, port, 
+        10 seconds, 30 minutes, 1, reporter.ref, database.ref))
       Then("it should bind to the tcp port")
       tcpActor.expectMsgType[Bind]
 
       When("the writer connects")
       val writer = TestProbe("writer")
       val server = tcpActor.lastSender
-      writer.send(server, Connected(writerRemote, writerRemote))
+      writer.send(server, Connected(port, port))
       Then("a handler should be registered")
       val writerHandler = writer.expectMsgType[Register].handler
       And("A keepalive should be sent")
@@ -54,7 +57,7 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
 
       When("the reader connects")
       val reader = TestProbe("reader")
-      reader.send(server, Connected(readerRemote, readerRemote))
+      reader.send(server, Connected(port, port))
       Then("a handler should be registered")
       val readerHandler = reader.expectMsgType[Register].handler
       And("A keepalive should be sent")
@@ -66,25 +69,19 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
 
       Then("the writer should be asked for a sequence")
       val writerRequest = writer.expectMsgType[Write]
-      val xor = (headerCodec ~ sequenceRequestCodec).decode(writerRequest.data.toByteVector.toBitVector).toXor
+      val xor = (headerCodec ~ sequenceRequestCodec).decode(writerRequest.data.toBitVector).toXor
       inside(xor) {
         case Xor.Right(result) => val (header, request) = result.value
           header should ===(writeSequenceRequest)
           val seq = SequenceGenerator(request.offset, request.size)
           When("the writer responds")
           seq.foreach { i =>
-            writer.send(writerHandler, Received(encode(headerCodec ~ writeNumberCodec)((writeSequenceResponse, i))
+            writer.send(writerHandler, Received(encode(headerCodec ~ int32)((writeSequenceResponse, i))
               .toByteVector.toByteString))
           }
           Then("the reader should receive a sequence")
           reader.expectMsgType[Write]
       }
     }
-    "regiter the reader and writer as clients" in(pending)
-    "receive requests for 1000 sequences from the reader" in(pending)
-    "request sequences from the writer" in(pending)
-    "forward sequences from the writer to the reader" in(pending)
-    "only keep 1000 channels open" in(pending)
-    "periodically send keepalive messages" in(pending)
   }
 }

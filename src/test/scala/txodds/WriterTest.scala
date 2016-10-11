@@ -16,10 +16,13 @@ import java.net.InetSocketAddress
 import cats._
 import cats.data._
 
+import scodec.codecs._
+
 class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll with GivenWhenThen with Inside {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
   val remote = new InetSocketAddress(0)
@@ -35,16 +38,15 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       When("the system starts")
       tcpActor = TestProbe("tcpActor")
       connectionActor = TestProbe("connection")
-      writerSystem = system.actorOf(WriterSystem.props(1 second, 10 seconds, tcpActor.ref, remote, reporter.ref),
+      writerSystem = system.actorOf(WriterSystem.props(10 seconds, 10 minutes, tcpActor.ref, remote, reporter.ref),
         "writer-system-0")
 
       Then("it should connect to the remote port via tcp")
       checkTcpConnection()
 
       And("it should send a greet and keepalive message")
-      checkGreet()
-      checkKeepAlive()
-
+      checkGreetOrKeepAlive()
+      checkGreetOrKeepAlive()
       When("the keepalive is responded to")
       respondToKeepAlive()
 
@@ -69,8 +71,8 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       checkTcpConnection()
 
       And("it should send a greet and keepalive message")
-      checkGreet()
-      checkKeepAlive()
+      checkGreetOrKeepAlive()
+      checkGreetOrKeepAlive()
 
       When("the keepalive is not responded to")
       Thread.sleep((1 second).toMillis)
@@ -87,19 +89,11 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
       connectionActor.expectMsg(Tcp.Register(client))
     }
 
-    def checkGreet(): Unit = {
+    def checkGreetOrKeepAlive(): Unit = {
       val writeMessage = connectionActor.expectMsgType[Tcp.Write]
-      val data = writeMessage.data.toByteVector
-      inside(Codecs.headerCodec.decode(data.toBitVector).toXor) {
-        case Xor.Right(result) => result.value should ===(Headers.writeGreet)
-      }
-    }
-
-    def checkKeepAlive(): Unit = {
-      val writeMessage = connectionActor.expectMsgType[Tcp.Write]
-      val data = writeMessage.data.toByteVector
-      inside(Codecs.headerCodec.decode(data.toBitVector).toXor) {
-        case Xor.Right(result) => result.value should ===(Headers.keepAliveRequest)
+      val data = writeMessage.data.toBitVector
+      inside(Codecs.headerCodec.decode(data).toXor) {
+        case Xor.Right(result) => result.value should (equal(Headers.writeGreet) or equal(Headers.keepAliveRequest))
       }
     }
 
@@ -125,7 +119,7 @@ class WriterTest extends TestKit(ActorSystem("WriterTest")) with ImplicitSender
 
     def expectSequenceResponse(expected: Int): Unit = {
       val msg = connectionActor.expectMsgType[Tcp.Write]
-      (Codecs.headerCodec ~ Codecs.writeNumberCodec).decode(msg.data.toByteVector.toBitVector).toXor match {
+      (Codecs.headerCodec ~ int32).decode(msg.data.toBitVector).toXor match {
         case Xor.Left(err) => fail(s"could not decode sequence response $err")
         case Xor.Right(result) => 
           val (header, number) = result.value
