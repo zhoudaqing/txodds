@@ -57,6 +57,8 @@ class Client(tcpActor: ActorRef, remote: InetSocketAddress) extends Actor with A
       listeners += (header -> listener)
       listener ! Client.Connected
     case Outgoing(data) =>
+      //FIXME Wait needed or messages get dropped
+      Thread.sleep(300)
       connection ! Write(data.toByteString)
     case CommandFailed(_: Write) =>
       log.error("Failed to write data to server")

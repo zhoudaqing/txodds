@@ -26,8 +26,8 @@ object ReaderApp {
     val reporter = system.actorOf(StatsReporter.props(http, materializer, "localhost", 8091))
 
     val io = IO(Tcp)
-    val readerPort = new InetSocketAddress("localhost", 8090)
-    val server = system.actorOf(ReaderSystem.props(5 minutes, 30 minutes, io, readerPort, 10, reporter))
+    val readerPort = new InetSocketAddress("localhost", 8080)
+    val server = system.actorOf(ReaderSystem.props(5 minutes, 30 minutes, io, readerPort, 1000, reporter))
   }
 }
 

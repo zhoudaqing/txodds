@@ -31,7 +31,7 @@ object ServerApp {
     val database = system.actorOf(Database.props("basic-db", "numbers"), "database")
     val io = IO(Tcp)
     val port = new InetSocketAddress("localhost", 8080)
-    val server = system.actorOf(ServerSystem.props(io, port, 5 minutes, 30 minutes, 10, reporter, database))
+    val server = system.actorOf(ServerSystem.props(io, port, 5 minutes, 30 minutes, 1000, reporter, database))
   }
 }
 
