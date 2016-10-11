@@ -43,11 +43,11 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
       Then("it should connect to the remote port via tcp")
       checkTcpConnection()
       And("it should send a keepalive message")
-      checkKeepAlive()
+      checkRequestOrKeepAlive()
       And("it should send 3 requests")
-      checkRequest()
-      checkRequest()
-      checkRequest()
+      checkRequestOrKeepAlive()
+      checkRequestOrKeepAlive()
+      checkRequestOrKeepAlive()
     }
 
     "receive sequential integers for each UUID" in {
@@ -60,9 +60,10 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
       Then("it should connect to the remote port via tcp")
       checkTcpConnection()
       And("it should send a keepalive message")
-      checkKeepAlive()
+      val o1 = checkRequestOrKeepAlive()
       And("it should send a request")
-      val id = checkRequest()
+      val o2 = checkRequestOrKeepAlive()
+      val id = o1.orElse(o2).get
       
       When("it receives a keepalive response")
       respondToKeepAlive()
@@ -90,14 +91,6 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
       connectionActor.expectMsg(Tcp.Register(client))
     }
 
-    def checkKeepAlive(): Unit = {
-      val writeMessage = connectionActor.expectMsgType[Tcp.Write]
-      val data = writeMessage.data.toBitVector
-      inside(Codecs.headerCodec.decode(data).toXor) {
-        case Xor.Right(result) => result.value should ===(Headers.keepAliveRequest)
-      }
-    }
-
     def respondToKeepAlive(): Unit = {
       val client = tcpActor.lastSender
       val data = Codecs.headerCodec.encode(Headers.keepAliveResponse).toXor match {
@@ -116,6 +109,18 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
       case Xor.Left(err) => fail(s"Could not decode start sequence request $err")
     }
   }
+
+  def checkRequestOrKeepAlive(): Option[UUID] = {
+    val write = connectionActor.expectMsgType[Tcp.Write]
+    val (header, data) = Codecs.decode(Codecs.headerDecoder, write.data.toBitVector)
+    if(header == Headers.startSequence) {
+      Some(Codecs.decode(Codecs.startSequenceCodec, data.toBitVector))
+    } else {
+      header should ===(Headers.keepAliveRequest)
+      None
+    }
+  }
+
 
   def respondToRequest(id: UUID, number: Int) = {
     val client = tcpActor.lastSender
