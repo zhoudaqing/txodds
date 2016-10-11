@@ -13,3 +13,7 @@ MongoDB is used for persistence.
 2. Start the server using `sbt "runMain txodds.ServerApp"`
 3. Start the writer using `sbt "runMain txodds.WriterApp"`
 4. Start the reader using `sbt "runMain txodds.ReaderApp"`
+
+The reader exposes stats on `localhost:8091/stats`
+The writer exposes stats on `localhost:8081/stats`
+The server exposes stats on `localhost:8092/stats`
