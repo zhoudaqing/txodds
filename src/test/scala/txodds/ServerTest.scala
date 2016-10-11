@@ -25,6 +25,7 @@ class ServerTest extends TestKit(ActorSystem("ServerTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll with GivenWhenThen with Inside {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
  

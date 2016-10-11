@@ -13,6 +13,7 @@ class KeepAliveTest extends TestKit(ActorSystem("KeepAliveTest")) with ImplicitS
   with WordSpecLike with Matchers with BeforeAndAfterAll {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
  

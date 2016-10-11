@@ -41,6 +41,7 @@ class Client(tcpActor: ActorRef, remote: InetSocketAddress) extends Actor with A
     case Client.RegisterListener(header, listener) =>
       listeners += (header -> listener)
     case c @ Connected(_, _) =>
+      log.info("Connected. Registering client on connection")
       val connection = sender()
       connection ! Register(self)
       listeners.values.toSet.foreach { (l: ActorRef) => l ! Client.Connected }
@@ -55,23 +56,23 @@ class Client(tcpActor: ActorRef, remote: InetSocketAddress) extends Actor with A
     case Client.RegisterListener(header, listener) =>
       listeners += (header -> listener)
       listener ! Client.Connected
-      case Client.Output(data) =>
-        connection ! Write(data.toByteString)
-      case CommandFailed(_: Write) =>
-        log.error("Failed to write data to server")
-      case Received(data) =>
-        var xor = for {
-          hd <- HeaderDecoder(data.toByteVector)
-          (header, data) = hd
-          listener <- listeners.get(header).toRightXor(NoListenerError(header))
-        } yield listener ! Client.Incoming(header, data)
-       
-        xor.leftMap { err => log.error(err.toString()) }
-      case _: ConnectionClosed =>
-        log.error("Connection between server closed")
-        context stop self
-      case o => log.error("unexpected message when connected [{}]", o)
-    }
+    case Client.Output(data) =>
+      connection ! Write(data.toByteString)
+    case CommandFailed(_: Write) =>
+      log.error("Failed to write data to server")
+    case Received(data) =>
+      var xor = for {
+        hd <- HeaderDecoder(data.toByteVector)
+        (header, data) = hd
+        listener <- listeners.get(header).toRightXor(NoListenerError(header))
+      } yield listener ! Client.Incoming(header, data)
+
+      xor.leftMap { err => log.error(err.toString()) }
+    case _: ConnectionClosed =>
+      log.error("Connection between server closed")
+      context stop self
+    case o => log.error("unexpected message when connected [{}]", o)
+  }
 
   def receive: Receive = unconnected
 }

@@ -22,6 +22,7 @@ class ReaderTest extends TestKit(ActorSystem("ReaderTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll with GivenWhenThen with Inside {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
 

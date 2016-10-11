@@ -19,6 +19,7 @@ class ClientTest extends TestKit(ActorSystem("ClientTest")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll {
  
   override def afterAll {
+    expectNoMsg()
     TestKit.shutdownActorSystem(system)
   }
  
