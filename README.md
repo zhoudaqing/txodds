@@ -9,6 +9,7 @@ Akka-HTTP is used to expose rudimentary stats reports.
 MongoDB is used for persistence.
 
 ## How to use
-1. Start the server using `sbt "runMain txodds.ServerApp"`
-2. Start the writer using `sbt "runMain txodds.WriterApp"`
-3. Start the reader using `sbt "runMain txodds.ReaderApp"`
+1. Start a MongoDB server on port 27017
+2. Start the server using `sbt "runMain txodds.ServerApp"`
+3. Start the writer using `sbt "runMain txodds.WriterApp"`
+4. Start the reader using `sbt "runMain txodds.ReaderApp"`
