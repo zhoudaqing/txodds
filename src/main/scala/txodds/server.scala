@@ -76,7 +76,6 @@ class Server(tcpActor: ActorRef, remote: InetSocketAddress, f: ActorRef => Props
       val connection = sender()
       log.info("Connected to actor [{}]", connection.path.name)
       val handler: ActorRef = context.actorOf(f(connection), s"handler-${connection.path.name}")
-      connection ! Register(handler)
     case CommandFailed(_: Bind) => 
       log.error("Failed to bind to port. Exiting.")
       context stop self
@@ -97,6 +96,7 @@ class Handler(connection: ActorRef, core: ActorRef,
   var keepAlive: ActorRef = _
 
   override def preStart(): Unit = {
+    connection ! Register(self)
     keepAlive = context.actorOf(KeepAlive.props(timeout, period, self, List(self)), "keepalive")
     keepAlive ! Client.Connected
   }
